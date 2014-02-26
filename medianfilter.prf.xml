@@ -19,6 +19,7 @@ program.  If not, see http://www.gnu.org/licenses/.
 -->
 <properties>
   <simple id="filtLen" mode="readwrite" type="ushort">
+    <description>Filter length is the lenght of the sliding window being applied to the data</description>
     <value>11</value>
     <kind kindtype="configure"/>
     <action type="external"/>
