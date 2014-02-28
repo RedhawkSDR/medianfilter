@@ -124,7 +124,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
 
                 
     def testOne(self):
-        """Send a simple ramp threw the filter and note the filter delay
+        """Send a simple ramp through the filter and note the filter delay
         """
         input = [float(x) for x in range(20)] 
         self.main(input)
@@ -133,7 +133,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.checkResults(expectedOutput)
 
     def testTwo(self):
-        """Send the same ramp threw the filter but send it one sample at a time to ensure filtering works properly
+        """Send the same ramp through the filter but send it one sample at a time to ensure filtering works properly
            with transitions regardless of transfer length
         """
         input = [float(x) for x in range(20)] 
@@ -145,7 +145,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.checkResults(expectedOutput)    
     
     def testThree(self):
-        """Send the same ramp threw the filter but send it a few samples at a time to ensure filtering works properly
+        """Send the same ramp through the filter but send it a few samples at a time to ensure filtering works properly
            with transitions regardless of transfer length
         """
         input = [float(x) for x in range(20)] 
@@ -248,7 +248,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         input = [float(x) for x in range(20)] 
         numSamples = 4
         numPushes = (len(input)+numSamples-1)/numSamples
-        #sadly ... need to do this as two seperate transactions do to a limitation in the sink
+        #sadly ... need to do this as two seperate transactions are required due to a limitation in the sink
         for i in xrange(numPushes):
             inData = input[i*numSamples:(i+1)*numSamples]
             self.src.push(inData, streamID='stream1')
@@ -263,9 +263,9 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
     def main(self,inData=None, eos=False):
         """The main engine for all the test cases - configure the equation, push data, and get output
-           As applicable
+           as applicable
         """
-        #data processing is asynchronos - so wait until the data is all processed
+        #data processing is asynchronous - so wait until the data is all processed
         count=0
         if inData:
             self.src.push(inData, EOS=eos)

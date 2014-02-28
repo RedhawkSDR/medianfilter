@@ -22,7 +22,7 @@ program.  If not, see http://www.gnu.org/licenses/.
   <author>
     <name>null</name>
   </author>
-  <description>Nonlinear digital filter which applies yields the median over a sliding window when applied to a data set, thus removing all peaks more narrow then the window.</description>
+  <description>Nonlinear digital filter which yields the median over a sliding window when applied to a data set, thus removing all peaks more narrow then the window.</description>
   <propertyfile type="PRF">
     <localfile name="medianfilter.prf.xml"/>
   </propertyfile>
