@@ -95,6 +95,10 @@ class medianfilter_i(medianfilter_base):
         """
         data, T, EOS, streamID, sri, sriChanged, inputQueueFlushed = self.port_dataFloat_in.getPacket()
         
+        if inputQueueFlushed:
+            self._log.warning("inputQueueFlushed - state reset")
+            self.state={}
+        
         if data == None:
             return NOOP
         
