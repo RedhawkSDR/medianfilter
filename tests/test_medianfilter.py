@@ -61,7 +61,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         #do the connections
         self.src.connect(self.comp)        
         self.comp.connect(self.sink,'floatIn')
-        self.output=[]
+        self.output={}
         
     def tearDown(self):
         """Finish the unit test - this is run after every method that starts with test
@@ -144,6 +144,21 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         expectedOutput = input[delay:-delay]
         self.checkResults(expectedOutput)    
     
+    def testThree(self):
+        """Send the same ramp threw the filter but send it a few samples at a time to ensure filtering works properly
+           with transitions regardless of transfer length
+        """
+        input = [float(x) for x in range(20)] 
+        numSamples = 4
+        numPushes = (len(input)+numSamples-1)/numSamples
+        for i in xrange(numPushes):
+            inData = input[i*numSamples:(i+1)*numSamples]
+            self.src.push(inData)
+        self.main()
+        delay = (self.filtLen)/2
+        expectedOutput = input[delay:-delay]
+        self.checkResults(expectedOutput)  
+    
     def testChangeFiltLenSmaller(self):
         
         input = [float(x) for x in range(20)] 
@@ -152,16 +167,17 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         expectedOutput = input[delay:-delay]
         self.checkResults(expectedOutput)
         
-        
         self.setProps(filtLen = 5)
-        self.output=[]
+        self.output={}
         self.main(input)
         delay = (self.filtLen)/2
         #the filter is already primed  so we have two extra samples at the front
         #filter values will be as follows:
+        #[16,17,18,19,0] -> 17; 
+        #[17,18,19,0,1] -> 17; 
         #[18,19,0,1,2] -> 2; 
         #[19,0,1,2,3] -> 2 
-        expectedOutput = [2.0, 2.0]
+        expectedOutput = [17, 17, 2.0, 2.0]
         expectedOutput.extend(input[delay:-delay])
         self.checkResults(expectedOutput)
 
@@ -174,13 +190,13 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.checkResults(expectedOutput)
         
         self.setProps(filtLen = 9)
-        self.output=[]
+        self.output={}
         self.main(input)
         delay = (self.filtLen)/2
         #the filter is already primed  so we have extra samples at the front
         #filter values will be as follows:s
-        #[14,14,14,15,16,17,18,19,0] -> 15; 
-        #[14,14,15,16,17,18,19,0,1] -> 15; 
+        #[12,13,14,15,16,17,18,19,0] -> 15; 
+        #[13,14,15,16,17,18,19,0,1] -> 15; 
         #[14,15,16,17,18,19,0,1,2] -> 15
         #[15,16,17,18,19,0,1,2,3] -> 15;
         #[16,17,18,19,0,1,2,3,4] - > 4;
@@ -197,8 +213,9 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.main(input)
         delay = (self.filtLen)/2
         expectedOutput = []
-        maxVal = max(self.output)
-        minVal = min(self.output)
+        outData = self.output.values()[0]
+        maxVal = max(outData)
+        minVal = min(outData)
         #just chop off the top and bottom part of the sin wave 
         for x in input[delay:-delay]:
             if x>maxVal:
@@ -209,27 +226,73 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
                 expectedOutput.append(x) 
                        
         self.checkResults(expectedOutput)   
+    
+    def testEos(self):
+        """Verify the end of stream is working properly
+        """
+        input = [float(x) for x in range(20)] 
+        self.main(input)
+        delay = (self.filtLen)/2
+        expectedOutput = input[delay:-delay]
+        self.output={}
+        self.main(input,True)
+        for x, y in zip(expectedOutput, self.output.values()[0]):
+                self.assertNotAlmostEqual(x,y)
+        self.output={}
+        self.main(input)
+        self.checkResults(expectedOutput)      
+
+    def testMultiStream(self):
+        """Verify the end of stream is working properly
+        """
+        input = [float(x) for x in range(20)] 
+        numSamples = 4
+        numPushes = (len(input)+numSamples-1)/numSamples
+        #sadly ... need to do this as two seperate transactions do to a limitation in the sink
+        for i in xrange(numPushes):
+            inData = input[i*numSamples:(i+1)*numSamples]
+            self.src.push(inData, streamID='stream1')
+        self.main()
+        for i in xrange(numPushes):
+            inData = input[i*numSamples:(i+1)*numSamples]
+            self.src.push(inData, streamID='stream2')
+        self.main()
+        delay = (self.filtLen)/2
+        expectedOutput = input[delay:-delay]
+        self.checkResults(expectedOutput, 'stream2')  
         
-        
-    def main(self,inData=None):
+    def main(self,inData=None, eos=False):
         """The main engine for all the test cases - configure the equation, push data, and get output
            As applicable
         """
         #data processing is asynchronos - so wait until the data is all processed
         count=0
         if inData:
-            self.src.push(inData)
+            self.src.push(inData, EOS=eos)
         while True:
-            self.output.extend(self.sink.getData())
+            newData = self.sink.getData()
+            if newData:
+                streamID = self.sink.sri().streamID
+                oldData = self.output.setdefault(self.sink.sri().streamID,[])
+                oldData.extend(newData)
+                count=0
+            else:
+                count+=1
+                time.sleep(.01)
+                count+=1
             if count==40:
                 break
-            time.sleep(.01)
-            count+=1
+
     
-    def checkResults(self, expectedOutput):       
-        self.assertEqual(len(expectedOutput), len(self.output))
+    def checkResults(self, expectedOutput,streamID=None):
+        if streamID==None and len(self.output)==1:
+            output = self.output.values()[0]
+        else:
+            output = self.output[streamID]
+                   
+        self.assertEqual(len(expectedOutput), len(output))
         if expectedOutput:
-            for x, y in zip(expectedOutput, self.output):
+            for x, y in zip(expectedOutput, output):
                 self.assertAlmostEqual(x,y)
    
 if __name__ == "__main__":

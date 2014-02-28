@@ -31,6 +31,45 @@ from scipy.signal import medfilt
 
 from medianfilter_base import * 
 
+class MedianFilterState (object):
+    MAX_DATA=32*1024
+    def __init__(self):
+        self.oldData=[]
+        self.hasRun=False
+    
+    def getProcessData(self, data, filtDelay):
+        oldDataLen = len(self.oldData)
+        dataLen=  len(data)
+        doProcess = True
+        if self.hasRun: 
+            #keep it running at all costs here - pad oldData if we don't have enough old data here to make it work
+            if oldDataLen < filtDelay:
+                #need to pad data:
+                missingNum = filtDelay-oldDataLen
+                self.oldData = self.oldData[0]*missingNum+self.oldData
+        else:
+            #we haven't run yet - if we don't have enough data then just be done with this thing
+            if oldDataLen+dataLen < filtDelay:
+                doProcess = False
+        if doProcess:
+            #normal case - grab the last filtDelay elements to feed them into the filter with our new data
+            processData = self.oldData[-filtDelay:]
+            processData.extend(data)
+            self.hasRun = True
+        else:
+            processData = None
+        #add the data to the old Data
+        self.oldData.extend(data)
+        
+        #make sure we are keeping enough data if user has requested a HUGE filter delay
+        if filtDelay> self.MAX_DATA:
+            self.MAX_DATA = filtDelay
+        #don't let our old data buffer be infinitly big
+        if len(self.oldData) > self.MAX_DATA:
+            self.oldData = self.oldData[-self.MAX_DATA:]
+        return processData
+            
+
 class medianfilter_i(medianfilter_base):
     """This is a median filter component.  It has one property - filtLen
        filtLen must be odd
@@ -48,26 +87,25 @@ class medianfilter_i(medianfilter_base):
         This is called by the framework immediately after your component registers with the NameService.
         """
         medianfilter_base.initialize(self)
-        self.oldData=[]
-        self.hasRun=False
-        self.streamID = None
+        self.state={}
         
 
     def process(self):
         """Process loop
         """
-
         data, T, EOS, streamID, sri, sriChanged, inputQueueFlushed = self.port_dataFloat_in.getPacket()
-            
+        
         if data == None:
             return NOOP
         
-        if self.streamID!=streamID:
-            if self.streamID==None:
-                self.streamID=streamID
-            else:
-                print "WARNING - medianfilter streamID %s differs from pkt stream ID %s. Throw this packets data on the floor" %(self.streamID, streamID)
-                return NORMAL
+        if self.state.has_key(streamID) and not inputQueueFlushed:
+            state=self.state[streamID]
+        else:
+            state = MedianFilterState()
+            self.state[streamID]= state
+        
+        if inputQueueFlushed:
+            self._log.warning("inputQueueFlushed - state reset")
         
         if sriChanged or not self.port_dataFloat_out.sriDict.has_key(streamID):
             self.port_dataFloat_out.pushSRI(sri)
@@ -79,42 +117,21 @@ class medianfilter_i(medianfilter_base):
         #cache off filtLen in case the user configures it - it will be applied next loop           
         thisFiltLen = self.filtLen
         filtDelay = thisFiltLen-1
-              
-        if self.oldData:
-            oldDataLen = len(self.oldData)
-            if oldDataLen > filtDelay:
-                #the user has shrunk the filterSize - throw away the first elements as we no longer need them
-                self.oldData = self.oldData[:-filtDelay]
-            elif filtDelay > oldDataLen:
-                #if we haven't run yet - nothing extra to do - just keep building up samples for the future
-                if self.hasRun:
-                    #We don't have the old samples any more we would need to filter properly
-                    #just duplicate the first sample and hope it is a good representative of the missing one
-                    numMissing = filtDelay-oldDataLen
-                    oldData = self.oldData                 
-                    self.oldData = [oldData[0]]*numMissing
-                    self.oldData.extend(oldData)               
-                    
-            processData = self.oldData
-            processData.extend(data)
-        else:         
-            processData = data
-                
-        halfDelay = filtDelay/2
-        #make sure we have enough data to process
-        if len(processData) >= (thisFiltLen):
-            out = medfilt(processData,thisFiltLen)
-            #don't include the first and last elements as there is insufficient data to get their median properly
-            outputData = out[halfDelay:-halfDelay]
-            #store off the last inputs to use next loop 
-            self.oldData = processData[-filtDelay:]
-            #adjust the time code for the delay caused by the filtering
-            T.toff = halfDelay
-            #push out the data
-            self.port_dataFloat_out.pushPacket(outputData.tolist(), T, EOS, sri.streamID)
-            self.hasRun = True
-        else:
-            self.oldData = processData
+        
+        if len(data)>0:
+            processData = state.getProcessData(data, filtDelay)
+            if processData:
+                halfDelay = filtDelay/2
+                #make sure we have enough data to process
+                out = medfilt(processData,thisFiltLen)
+                #don't include the first and last elements as there is insufficient data to get their median properly
+                outputData = out[halfDelay:-halfDelay]
+                #adjust the time code for the delay caused by the filtering
+                T.toff = halfDelay
+                #push out the data
+                self.port_dataFloat_out.pushPacket(outputData.tolist(), T, EOS, sri.streamID)
+        if EOS:
+            self.state.pop(streamID)
         return NORMAL
         
   
