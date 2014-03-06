@@ -51,9 +51,11 @@ class ProcessThread(threading.Thread):
         state = NORMAL
         while (state != FINISH) and (not self.stop_signal.isSet()):
             state = self.target()
+            delay = 1e-6
             if (state == NOOP):
                 # If there was no data to process sleep to avoid spinning
-                time.sleep(self.pause)
+                delay = self.pause
+            time.sleep(delay)
 
 class medianfilter_base(CF__POA.Resource, Resource):
         # These values can be altered in the __init__ of your derived class
@@ -67,7 +69,7 @@ class medianfilter_base(CF__POA.Resource, Resource):
             Resource.__init__(self, identifier, execparams, loggerName=loggerName)
             self.threadControlLock = threading.RLock()
             self.process_thread = None
-            # self.auto_start is deprecated and is only kept for API compatability
+            # self.auto_start is deprecated and is only kept for API compatibility
             # with 1.7.X and 1.8.0 components.  This variable may be removed
             # in future releases
             self.auto_start = False
@@ -88,6 +90,7 @@ class medianfilter_base(CF__POA.Resource, Resource):
                     self.process_thread.start()
             finally:
                 self.threadControlLock.release()
+
 
         def process(self):
             """The process method should process a single "chunk" of data and then return.  This method will be called
@@ -145,5 +148,7 @@ class medianfilter_base(CF__POA.Resource, Resource):
                                   defvalue=11,
                                   mode="readwrite",
                                   action="external",
-                                  kinds=("configure",)                                 )
+                                  kinds=("configure",),
+                                  description="""Filter length is the length of the sliding window being applied to the data"""
+                                  )
 
