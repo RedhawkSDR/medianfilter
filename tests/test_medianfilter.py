@@ -123,7 +123,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             self.assertEqual(port_obj._is_a(port.get_repid()),  True)
 
                 
-    def testOne(self):
+    def testSimpleRampFilterDelay(self):
         """Send a simple ramp through the filter and note the filter delay
         """
         input = [float(x) for x in range(20)] 
@@ -132,7 +132,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         expectedOutput = input[delay:-delay]
         self.checkResults(expectedOutput)
 
-    def testTwo(self):
+    def testFilterOneSampleAtATime(self):
         """Send the same ramp through the filter but send it one sample at a time to ensure filtering works properly
            with transitions regardless of transfer length
         """
@@ -144,7 +144,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         expectedOutput = input[delay:-delay]
         self.checkResults(expectedOutput)    
     
-    def testThree(self):
+    def testFilterMultipleSamplesAtATime(self):
         """Send the same ramp through the filter but send it a few samples at a time to ensure filtering works properly
            with transitions regardless of transfer length
         """
